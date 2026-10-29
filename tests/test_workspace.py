@@ -1,5 +1,4 @@
 from concurrent.futures import ThreadPoolExecutor
-import sqlite3
 
 from fastapi.testclient import TestClient
 import pytest
@@ -18,7 +17,7 @@ def test_workspace_update_survives_application_restart(settings):
         assert saved["revision"] == original["revision"] + 1
     with TestClient(create_app(settings), base_url="http://localhost") as second:
         assert second.get("/api/workspace").json() == saved
-    with sqlite3.connect(settings.database_path) as connection:
+    with Database(settings.database_path).connect() as connection:
         assert connection.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0] == 1
         assert connection.execute("SELECT COUNT(*) FROM workspace").fetchone()[0] == 1
 
@@ -80,7 +79,7 @@ def test_newer_database_is_not_modified(settings):
 
 
 def test_health_reports_unavailable_database(client, settings):
-    with sqlite3.connect(settings.database_path) as connection:
+    with Database(settings.database_path).connect() as connection:
         connection.execute("DROP TABLE workspace")
     response = client.get("/api/health")
     assert response.status_code == 503

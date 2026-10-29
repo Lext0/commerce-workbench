@@ -12,7 +12,8 @@ Python 3.12 或更高版本。
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+.\.venv\Scripts\python.exe -m pip install -r requirements.lock
+.\.venv\Scripts\python.exe -m pip install --no-deps -e .
 .\.venv\Scripts\python.exe -m commerce_workbench
 ```
 
@@ -23,7 +24,7 @@ Linux 和 macOS 使用 `.venv/bin/python` 替代 Windows 的 Python 路径。
 ## 检查
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe scripts/check.py
 ```
 
 ## 当前功能
