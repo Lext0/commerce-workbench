@@ -18,5 +18,8 @@ commerce-workbench = "commerce_workbench.__main__:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+commerce_workbench = ["static/*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

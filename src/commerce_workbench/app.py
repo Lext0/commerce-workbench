@@ -1,8 +1,10 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 import sqlite3
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from commerce_workbench import __version__
@@ -20,7 +22,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         database.initialize()
         yield
 
-    app = FastAPI(title="Commerce Workbench", version=__version__, lifespan=lifespan)
+    app = FastAPI(
+        title="Commerce Workbench", version=__version__, lifespan=lifespan,
+        docs_url=None, redoc_url=None,
+    )
+    static_dir = Path(__file__).with_name("static")
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
     app.add_middleware(
         TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "[::1]"]
     )
@@ -36,6 +43,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 return JSONResponse({"detail": "请使用 JSON 提交内容"}, status_code=415)
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; script-src 'self'; style-src 'self'; "
+            "img-src 'self' data:; connect-src 'self'; base-uri 'self'; "
+            "frame-ancestors 'none'; form-action 'self'"
+        )
+        response.headers["Referrer-Policy"] = "same-origin"
         if request.url.path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-store"
         return response
@@ -54,6 +67,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 status_code=503,
             )
         return {"status": "ok", "database": "ready", "version": __version__}
+
+    @app.get("/")
+    def home():
+        return FileResponse(static_dir / "index.html", headers={"Cache-Control": "no-cache"})
 
     @app.get("/api/workspace")
     def get_workspace():

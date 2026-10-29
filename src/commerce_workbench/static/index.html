@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>商品工作台</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <link rel="stylesheet" href="/static/app.css">
+  <script defer src="/static/app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="工作台导航">
+      <a class="brand" href="#/">
+        <span class="brand-mark" aria-hidden="true">商</span>
+        <span><strong>商品工作台</strong><small>COMMERCE WORKBENCH</small></span>
+      </a>
+      <p class="nav-label">我的工作台</p>
+      <nav aria-label="主要导航">
+        <a class="nav-link active" href="#/" data-route="overview" aria-current="page"><span aria-hidden="true">▦</span>工作台概览</a>
+        <a class="nav-link" href="#/settings" data-route="settings"><span aria-hidden="true">⚙</span>工作台设置</a>
+      </nav>
+      <p class="nav-label business-label">业务功能</p>
+      <ul class="upcoming-nav">
+        <li>商品管理<span>待开放</span></li>
+        <li>一键铺货<span>待开放</span></li>
+        <li>知识管理<span>待开放</span></li>
+        <li>客服咨询<span>待开放</span></li>
+        <li>售后工单<span>待开放</span></li>
+      </ul>
+      <div class="sidebar-bottom"><i id="connection-dot" class="connection-dot" aria-hidden="true"></i><span id="connection-text" role="status">正在连接工作台</span></div>
+    </aside>
+
+    <div class="workspace">
+      <header class="topbar">
+        <div class="breadcrumb">工作台<span aria-hidden="true">/</span><strong id="current-section">概览</strong></div>
+        <time id="today"></time>
+      </header>
+      <main id="main" tabindex="-1">
+        <div id="load-error" class="message error" role="alert" hidden>
+          <span>暂时无法读取工作台，请检查服务连接后重试。</span>
+          <button id="retry-load" class="button button-small" type="button">重新加载</button>
+        </div>
+
+        <section data-view="overview" aria-labelledby="overview-title">
+          <div class="hero">
+            <div class="eyebrow">你的日常工作空间</div>
+            <h1 id="overview-title" data-workspace-name>正在读取工作台</h1>
+            <p>工作台已经建立。先设置一个便于识别的名称，再逐步开始日常业务。</p>
+            <a class="button button-primary" href="#/settings">设置工作台<span aria-hidden="true">↗</span></a>
+            <div class="hero-art" aria-hidden="true"><div class="art-card art-back"></div><div class="art-card art-front"><span>商</span><i></i><i></i><i></i></div></div>
+          </div>
+          <div class="summary-grid">
+            <article class="summary-card"><span class="summary-label">当前工作台</span><strong data-workspace-name>正在读取</strong><p>统一使用的工作台名称</p></article>
+            <article class="summary-card"><span class="summary-label">最近更新</span><strong id="updated-at">正在读取</strong><p>工作台设置的保存时间</p></article>
+          </div>
+          <div class="section-heading"><div><h2>业务工作区</h2><p>商品和客户服务的功能会在这里陆续开放。</p></div><span class="tag">正在建设</span></div>
+          <div class="module-grid">
+            <article class="module-card"><span class="module-number">01</span><h3>商品管理</h3><p>集中维护商品资料与图片。</p><span class="module-state">待开放</span></article>
+            <article class="module-card"><span class="module-number">02</span><h3>一键铺货</h3><p>整理商品并批量发布。</p><span class="module-state">待开放</span></article>
+            <article class="module-card"><span class="module-number">03</span><h3>知识管理</h3><p>保存资料与常见问答。</p><span class="module-state">待开放</span></article>
+            <article class="module-card"><span class="module-number">04</span><h3>客服咨询</h3><p>保留客户对话并跟进问题。</p><span class="module-state">待开放</span></article>
+            <article class="module-card"><span class="module-number">05</span><h3>售后工单</h3><p>记录处理过程与服务结果。</p><span class="module-state">待开放</span></article>
+          </div>
+        </section>
+
+        <section data-view="settings" aria-labelledby="settings-title" hidden>
+          <div class="page-heading"><div class="eyebrow">保持工作台井然有序</div><h1 id="settings-title">工作台设置</h1><p>修改工作台名称，保存后会显示在首页。</p></div>
+          <div class="settings-layout">
+            <form id="settings-form" class="panel" novalidate>
+              <div class="panel-heading"><h2>基本信息</h2><p>给这份工作空间起一个容易辨认的名字。</p></div>
+              <fieldset id="settings-fields" disabled>
+                <label for="workspace-name">工作台名称</label>
+                <input id="workspace-name" name="name" type="text" maxlength="160" autocomplete="organization" required aria-describedby="name-help name-error">
+                <div class="input-meta"><span id="name-help">1 到 80 个字符</span><output id="name-count" for="workspace-name">0 / 80</output></div>
+                <p id="name-error" class="field-error" hidden></p>
+                <div class="form-actions"><button id="save-button" class="button button-primary" type="submit" disabled>保存设置</button><span id="save-state">尚未读取</span></div>
+              </fieldset>
+              <div id="form-message" class="message" role="status" aria-live="polite" hidden></div>
+              <button id="reload-workspace" class="text-button" type="button" hidden>重新载入最新设置</button>
+            </form>
+            <aside class="settings-aside"><span class="aside-mark" aria-hidden="true">◎</span><h2>一个名称，一处工作空间</h2><p>可以使用店铺名或团队名，方便在日常工作中辨认。</p><p>保存后的名称会在下次打开时继续使用。</p></aside>
+          </div>
+        </section>
+
+        <section data-view="missing" hidden><div class="panel missing"><h1>没有找到这个页面</h1><p>可以从导航选择需要的页面。</p><a href="#/" class="button button-primary">回到工作台</a></div></section>
+        <noscript><p class="message error">请启用浏览器 JavaScript 后使用工作台。</p></noscript>
+      </main>
+      <footer class="page-footer"><span>商品工作台</span><span>让日常工作更有条理</span></footer>
+    </div>
+  </div>
+</body>
+</html>
