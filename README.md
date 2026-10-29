@@ -28,4 +28,14 @@ Linux 和 macOS 使用 `.venv/bin/python` 替代 Windows 的 Python 路径。
 
 ## 当前功能
 
-服务启动和健康检查。
+服务启动和健康检查，以及工作台名称保存。数据保存在 SQLite 中。
+
+## 配置
+
+程序读取 `CW_HOST` 和 `CW_PORT`，以及 `CW_DATA_DIR` 环境变量。`.env.example` 列出可用配置，程序不会自动读取 `.env` 文件。
+
+默认只监听本机地址，数据保存在启动目录的 `data` 中。重新启动时使用同一个数据目录。
+
+```powershell
+.\.venv\Scripts\python.exe -m commerce_workbench --port 8788 --data-dir D:\workbench-data
+```
