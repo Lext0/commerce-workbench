@@ -4,7 +4,7 @@ def test_home_and_assets_can_be_loaded(client):
     assert "text/html" in response.headers["content-type"]
     assert "商品工作台" in response.text
     assert "script-src 'self'" in response.headers["content-security-policy"]
-    for asset, content_type in (("app.js", "javascript"), ("app.css", "text/css"), ("favicon.svg", "image/svg+xml")):
+    for asset, content_type in (("app.js", "javascript"), ("products.js", "javascript"), ("app.css", "text/css"), ("favicon.svg", "image/svg+xml")):
         response = client.get("/static/" + asset)
         assert response.status_code == 200
         assert content_type in response.headers["content-type"]

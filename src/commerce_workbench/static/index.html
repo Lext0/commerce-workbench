@@ -6,6 +6,7 @@
   <title>商品工作台</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <link rel="stylesheet" href="/static/app.css">
+  <script defer src="/static/products.js"></script>
   <script defer src="/static/app.js"></script>
 </head>
 <body>
@@ -19,11 +20,11 @@
       <p class="nav-label">我的工作台</p>
       <nav aria-label="主要导航">
         <a class="nav-link active" href="#/" data-route="overview" aria-current="page"><span aria-hidden="true">▦</span>工作台概览</a>
+        <a class="nav-link" href="#/products" data-route="products"><span aria-hidden="true">▤</span>商品管理</a>
         <a class="nav-link" href="#/settings" data-route="settings"><span aria-hidden="true">⚙</span>工作台设置</a>
       </nav>
       <p class="nav-label business-label">业务功能</p>
       <ul class="upcoming-nav">
-        <li>商品管理<span>待开放</span></li>
         <li>一键铺货<span>待开放</span></li>
         <li>知识管理<span>待开放</span></li>
         <li>客服咨询<span>待开放</span></li>
@@ -47,21 +48,60 @@
           <div class="hero">
             <div class="eyebrow">你的日常工作空间</div>
             <h1 id="overview-title" data-workspace-name>正在读取工作台</h1>
-            <p>工作台已经建立。先设置一个便于识别的名称，再逐步开始日常业务。</p>
-            <a class="button button-primary" href="#/settings">设置工作台<span aria-hidden="true">↗</span></a>
+            <p>从一件商品开始，整理名称和型号，随时查找并更新商品资料。</p>
+            <a class="button button-primary" href="#/products">管理商品<span aria-hidden="true">↗</span></a>
             <div class="hero-art" aria-hidden="true"><div class="art-card art-back"></div><div class="art-card art-front"><span>商</span><i></i><i></i><i></i></div></div>
           </div>
           <div class="summary-grid">
             <article class="summary-card"><span class="summary-label">当前工作台</span><strong data-workspace-name>正在读取</strong><p>统一使用的工作台名称</p></article>
             <article class="summary-card"><span class="summary-label">最近更新</span><strong id="updated-at">正在读取</strong><p>工作台设置的保存时间</p></article>
           </div>
-          <div class="section-heading"><div><h2>业务工作区</h2><p>商品和客户服务的功能会在这里陆续开放。</p></div><span class="tag">正在建设</span></div>
+          <div class="section-heading"><div><h2>业务工作区</h2><p>从这里进入日常工作。</p></div></div>
           <div class="module-grid">
-            <article class="module-card"><span class="module-number">01</span><h3>商品管理</h3><p>集中维护商品资料与图片。</p><span class="module-state">待开放</span></article>
+            <a class="module-card module-open" href="#/products"><span class="module-number">01</span><h3>商品管理</h3><p>新建商品，查找和更新资料。</p><span class="module-state">进入 →</span></a>
             <article class="module-card"><span class="module-number">02</span><h3>一键铺货</h3><p>整理商品并批量发布。</p><span class="module-state">待开放</span></article>
             <article class="module-card"><span class="module-number">03</span><h3>知识管理</h3><p>保存资料与常见问答。</p><span class="module-state">待开放</span></article>
             <article class="module-card"><span class="module-number">04</span><h3>客服咨询</h3><p>保留客户对话并跟进问题。</p><span class="module-state">待开放</span></article>
             <article class="module-card"><span class="module-number">05</span><h3>售后工单</h3><p>记录处理过程与服务结果。</p><span class="module-state">待开放</span></article>
+          </div>
+        </section>
+
+        <section data-view="products" aria-labelledby="products-title" hidden>
+          <div class="page-heading product-heading"><div><div class="eyebrow">把商品资料放在一起</div><h1 id="products-title">商品管理</h1><p id="products-subtitle">查找商品，维护名称和型号，以及售价等基本资料。</p></div><a id="new-product" class="button button-primary" href="#/products/new">＋ 新建商品</a></div>
+          <div id="product-list-panel" class="panel product-list-panel">
+            <form id="product-search-form" class="search-toolbar" role="search">
+              <div class="search-field"><label for="product-search" class="sr-only">搜索商品</label><input id="product-search" type="search" maxlength="120" placeholder="搜索名称或型号，也可以输入分类" autocomplete="off"></div>
+              <button class="button" type="submit">搜索</button><button id="clear-product-search" class="text-button" type="button" hidden>清空</button>
+            </form>
+            <p id="product-result-count" class="result-count" role="status" aria-live="polite"></p>
+            <div id="product-list-error" class="message error" role="alert" hidden><span>暂时无法读取商品，请稍后重试。</span><button id="retry-products" class="button button-small" type="button">重新加载</button></div>
+            <p id="products-loading" class="empty-state" role="status" hidden>正在读取商品</p>
+            <div id="products-empty" class="empty-state" hidden><span class="empty-symbol" aria-hidden="true">▤</span><h2 id="products-empty-title">还没有商品</h2><p id="products-empty-description">先添加第一件商品，把基本资料保存下来。</p><a id="empty-new-product" class="button button-primary" href="#/products/new">新建商品</a></div>
+            <div id="product-results" hidden>
+              <div class="product-table-heading product-row" aria-hidden="true"><span>商品名称与分类</span><span>型号</span><span>售价</span><span>最近更新</span><span>操作</span></div>
+              <ul id="product-list" class="product-list" aria-label="商品列表"></ul>
+            </div>
+            <div id="product-pagination" class="product-pagination" hidden><span id="product-page-info"></span><div><button id="products-prev" class="button button-small" type="button">上一页</button><button id="products-next" class="button button-small" type="button">下一页</button></div></div>
+          </div>
+          <div id="product-editor" hidden>
+            <a class="back-link" href="#/products">← 返回商品列表</a>
+            <p id="product-loading" class="message" role="status" hidden>正在读取商品资料</p>
+            <div id="product-load-error" class="message error" role="alert" hidden><span id="product-load-error-text"></span><button id="retry-product" class="button button-small" type="button">重新加载</button></div>
+            <form id="product-form" class="panel" novalidate>
+              <div class="panel-heading"><h2>基本资料</h2><p>商品名称和型号必填，其他资料可以稍后补充。</p></div>
+              <fieldset id="product-fields" disabled>
+                <div class="product-form-grid">
+                  <div><label for="product-name">商品名称 <span class="required-mark">*</span></label><input id="product-name" name="name" maxlength="240" autocomplete="off" required aria-describedby="product-name-error"><p id="product-name-error" class="field-error" hidden></p></div>
+                  <div><label for="product-model">商品型号 <span class="required-mark">*</span></label><input id="product-model" name="model" maxlength="128" autocomplete="off" required aria-describedby="product-model-help product-model-error"><p id="product-model-help" class="field-help">每件商品使用不同的型号</p><p id="product-model-error" class="field-error" hidden></p></div>
+                  <div><label for="product-category">分类</label><input id="product-category" name="category" maxlength="160" autocomplete="off" placeholder="例如日用百货" aria-describedby="product-category-error"><p id="product-category-error" class="field-error" hidden></p></div>
+                  <div><label for="product-price">售价（元）</label><input id="product-price" name="price" type="text" inputmode="decimal" maxlength="16" autocomplete="off" placeholder="暂未确定可以留空" aria-describedby="product-price-error"><p id="product-price-error" class="field-error" hidden></p></div>
+                  <div class="product-description-field"><label for="product-description">商品说明</label><textarea id="product-description" name="description" rows="5" maxlength="8000" placeholder="记录规格和用途，方便后续查找" aria-describedby="product-description-error"></textarea><p id="product-description-error" class="field-error" hidden></p></div>
+                </div>
+                <div class="form-actions product-form-actions"><button id="save-product" class="button button-primary" type="submit">保存商品</button><a class="button" href="#/products">返回列表</a><span id="product-save-state" role="status"></span></div>
+              </fieldset>
+              <div id="product-message" class="message" role="status" aria-live="polite" hidden></div>
+              <button id="reload-product" class="text-button" type="button" hidden>载入最新商品资料</button>
+            </form>
           </div>
         </section>
 

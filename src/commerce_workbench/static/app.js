@@ -8,7 +8,11 @@ const formMessage = document.querySelector("#form-message");
 const reloadButton = document.querySelector("#reload-workspace");
 
 class RequestError extends Error {
-  constructor(status) { super(`Request failed (${status})`); this.status = status; }
+  constructor(status, detail) {
+    super(typeof detail === "string" ? detail : detail?.message || `Request failed (${status})`);
+    this.status = status;
+    this.code = detail?.code;
+  }
 }
 
 async function request(path, options = {}) {
@@ -21,7 +25,11 @@ async function request(path, options = {}) {
       signal: controller.signal,
       cache: "no-store",
     });
-    if (!response.ok) throw new RequestError(response.status);
+    if (!response.ok) {
+      let detail;
+      try { detail = (await response.json()).detail; } catch { /* Keep the HTTP status for non-JSON failures. */ }
+      throw new RequestError(response.status, detail);
+    }
     return await response.json();
   } finally { clearTimeout(timer); }
 }
@@ -87,16 +95,28 @@ async function loadWorkspace() {
   }
 }
 
+let activeHash = window.location.hash;
+document.querySelector(".skip-link").addEventListener("click", event => {
+  event.preventDefault();
+  document.querySelector("#main").focus();
+});
 function route() {
   const hash = window.location.hash;
-  const view = !hash || hash === "#/" || hash === "#main" ? "overview" : hash === "#/settings" ? "settings" : "missing";
+  if (!ProductUI.canLeave(hash)) {
+    history.replaceState(null, "", activeHash || "#/");
+    return;
+  }
+  const view = !hash || hash === "#/" || hash === "#main" ? "overview" : hash === "#/settings" ? "settings" : /^#\/products(?:\/(?:new|[1-9]\d*))?$/.test(hash) ? "products" : "missing";
   document.querySelectorAll("[data-view]").forEach(element => { element.hidden = element.dataset.view !== view; });
   document.querySelectorAll("[data-route]").forEach(element => {
     element.classList.toggle("active", element.dataset.route === view);
     if (element.dataset.route === view) element.setAttribute("aria-current", "page");
     else element.removeAttribute("aria-current");
   });
-  document.querySelector("#current-section").textContent = { overview: "概览", settings: "设置", missing: "页面未找到" }[view];
+  document.querySelector("#current-section").textContent = { overview: "概览", settings: "设置", products: "商品", missing: "页面未找到" }[view];
+  activeHash = hash;
+  if (view === "products") ProductUI.enter(hash);
+  else ProductUI.hide();
 }
 
 nameInput.addEventListener("input", () => { message(""); validateName(); });
