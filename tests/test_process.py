@@ -47,6 +47,15 @@ def test_saved_workspace_survives_process_restart(tmp_path):
         )
         with urlopen(request, timeout=3) as response:
             saved = json.load(response)
+        product_request = Request(
+            base + "/api/products",
+            data=json.dumps({"name": "重启后保留的商品", "model": "RESTART-1", "price_cents": 12345}).encode(),
+            method="POST", headers={"Content-Type": "application/json"},
+        )
+        with urlopen(product_request, timeout=3) as response:
+            product = json.load(response)
     with running_server(tmp_path / "data") as base:
         with urlopen(base + "/api/workspace", timeout=3) as response:
             assert json.load(response) == saved
+        with urlopen(base + f'/api/products/{product["id"]}', timeout=3) as response:
+            assert json.load(response) == product

@@ -2,15 +2,15 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 import sqlite3
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Path as PathParameter, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from commerce_workbench import __version__
 from commerce_workbench.config import Settings
-from commerce_workbench.database import Database, RevisionConflict
-from commerce_workbench.schemas import WorkspaceUpdate
+from commerce_workbench.database import Database, DuplicateModel, ProductNotFound, RevisionConflict
+from commerce_workbench.schemas import ProductFields, ProductList, ProductRead, ProductUpdate, WorkspaceUpdate
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -82,5 +82,36 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return database.update_workspace(payload.name, payload.revision)
         except RevisionConflict:
             raise HTTPException(status_code=409, detail="内容已在其他页面修改，请重新加载后保存")
+
+    @app.exception_handler(ProductNotFound)
+    async def product_not_found(request: Request, exc: ProductNotFound):
+        return JSONResponse({"detail": {"code": "not_found", "message": "没有找到这件商品"}}, status_code=404)
+
+    @app.exception_handler(DuplicateModel)
+    async def duplicate_model(request: Request, exc: DuplicateModel):
+        return JSONResponse({"detail": {"code": "duplicate_model", "message": "这个型号已被使用，请检查后修改"}}, status_code=409)
+
+    @app.get("/api/products", response_model=ProductList)
+    def list_products(
+        q: str = Query(default="", max_length=120),
+        limit: int = Query(default=20, ge=1, le=100),
+        offset: int = Query(default=0, ge=0, le=1000000),
+    ):
+        return database.products(q, limit, offset)
+
+    @app.post("/api/products", response_model=ProductRead, status_code=201)
+    def create_product(payload: ProductFields):
+        return database.create_product(payload.model_dump())
+
+    @app.get("/api/products/{product_id}", response_model=ProductRead)
+    def get_product(product_id: int = PathParameter(ge=1, le=9223372036854775807)):
+        return database.product(product_id)
+
+    @app.put("/api/products/{product_id}", response_model=ProductRead)
+    def update_product(payload: ProductUpdate, product_id: int = PathParameter(ge=1, le=9223372036854775807)):
+        try:
+            return database.update_product(product_id, payload.model_dump(exclude={"revision"}), payload.revision)
+        except RevisionConflict:
+            raise HTTPException(status_code=409, detail={"code": "revision_conflict", "message": "商品已在其他页面修改，请载入最新内容后再保存"})
 
     return app

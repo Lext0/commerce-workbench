@@ -3,10 +3,34 @@ from datetime import datetime, timezone
 from pathlib import Path
 import sqlite3
 from typing import Iterator
+import unicodedata
 
 
 class RevisionConflict(Exception):
-    """The workspace was changed after it was loaded."""
+    """The record was changed after it was loaded."""
+
+
+class ProductNotFound(Exception):
+    pass
+
+
+class DuplicateModel(Exception):
+    pass
+
+
+PRODUCT_COLUMNS = "id, name, model, category, description, price_cents, created_at, updated_at, revision"
+
+
+def search_key(value: str) -> str:
+    return unicodedata.normalize("NFKC", value).casefold()
+
+
+def product_values(payload: dict) -> tuple:
+    return (
+        payload["name"], payload["model"], search_key(payload["model"]),
+        payload["category"], payload["description"], payload["price_cents"],
+        search_key("\n".join(payload[key] for key in ("name", "model", "category"))),
+    )
 
 
 def utc_now() -> str:
@@ -40,7 +64,7 @@ class Database:
             version = connection.execute(
                 "SELECT COALESCE(MAX(version), 0) FROM schema_migrations"
             ).fetchone()[0]
-            if version > 1:
+            if version > 2:
                 raise RuntimeError("Database version is newer than this application")
             if version == 0:
                 connection.execute(
@@ -58,6 +82,22 @@ class Database:
                 connection.execute(
                     "INSERT INTO schema_migrations VALUES (1, ?)", (now,)
                 )
+            if version < 2:
+                connection.execute(
+                    "CREATE TABLE products ("
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                    "name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 120), "
+                    "model TEXT NOT NULL CHECK (length(trim(model)) BETWEEN 1 AND 64), "
+                    "model_key TEXT NOT NULL UNIQUE, "
+                    "category TEXT NOT NULL DEFAULT '' CHECK (length(category) <= 80), "
+                    "description TEXT NOT NULL DEFAULT '' CHECK (length(description) <= 4000), "
+                    "price_cents INTEGER CHECK (price_cents BETWEEN 0 AND 999999999), "
+                    "search_text TEXT NOT NULL, "
+                    "created_at TEXT NOT NULL, updated_at TEXT NOT NULL, "
+                    "revision INTEGER NOT NULL CHECK (revision >= 1))"
+                )
+                connection.execute("CREATE INDEX products_updated ON products(updated_at DESC, id DESC)")
+                connection.execute("INSERT INTO schema_migrations VALUES (2, ?)", (utc_now(),))
 
     def workspace(self) -> dict:
         with self.connect() as connection:
@@ -76,3 +116,64 @@ class Database:
             if result.rowcount != 1:
                 raise RevisionConflict()
             return dict(connection.execute("SELECT * FROM workspace WHERE id = 1").fetchone())
+
+    def product(self, product_id: int) -> dict:
+        with self.connect() as connection:
+            row = connection.execute(
+                f"SELECT {PRODUCT_COLUMNS} FROM products WHERE id = ?", (product_id,),
+            ).fetchone()
+            if row is None:
+                raise ProductNotFound()
+            return dict(row)
+
+    def products(self, query: str, limit: int, offset: int) -> dict:
+        with self.connect() as connection:
+            # Count and rows belong to the same SQLite snapshot.
+            connection.execute("BEGIN")
+            parameters = (search_key(query.strip()),)
+            where = "WHERE instr(search_text, ?) > 0"
+            total = connection.execute(f"SELECT COUNT(*) FROM products {where}", parameters).fetchone()[0]
+            rows = connection.execute(
+                f"SELECT {PRODUCT_COLUMNS} FROM products {where} "
+                "ORDER BY updated_at DESC, id DESC LIMIT ? OFFSET ?",
+                (*parameters, limit, offset),
+            ).fetchall()
+            return {"items": [dict(row) for row in rows], "total": total, "limit": limit, "offset": offset}
+
+    def create_product(self, payload: dict) -> dict:
+        with self.connect() as connection:
+            timestamp = utc_now()
+            try:
+                result = connection.execute(
+                    "INSERT INTO products (name, model, model_key, category, description, price_cents, "
+                    "search_text, created_at, updated_at, revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
+                    (*product_values(payload), timestamp, timestamp),
+                )
+            except sqlite3.IntegrityError as exc:
+                if exc.sqlite_errorname == "SQLITE_CONSTRAINT_UNIQUE":
+                    raise DuplicateModel() from exc
+                raise
+            return dict(connection.execute(
+                f"SELECT {PRODUCT_COLUMNS} FROM products WHERE id = ?", (result.lastrowid,),
+            ).fetchone())
+
+    def update_product(self, product_id: int, payload: dict, revision: int) -> dict:
+        with self.connect() as connection:
+            try:
+                result = connection.execute(
+                    "UPDATE products SET name = ?, model = ?, model_key = ?, category = ?, "
+                    "description = ?, price_cents = ?, search_text = ?, updated_at = ?, revision = revision + 1 "
+                    "WHERE id = ? AND revision = ?",
+                    (*product_values(payload), utc_now(), product_id, revision),
+                )
+            except sqlite3.IntegrityError as exc:
+                if exc.sqlite_errorname == "SQLITE_CONSTRAINT_UNIQUE":
+                    raise DuplicateModel() from exc
+                raise
+            if result.rowcount != 1:
+                if connection.execute("SELECT id FROM products WHERE id = ?", (product_id,)).fetchone() is None:
+                    raise ProductNotFound()
+                raise RevisionConflict()
+            return dict(connection.execute(
+                f"SELECT {PRODUCT_COLUMNS} FROM products WHERE id = ?", (product_id,),
+            ).fetchone())
