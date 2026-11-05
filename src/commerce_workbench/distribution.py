@@ -81,9 +81,17 @@ def import_csv(database, text):
                 raise ValueError('售价无效，最多保留两位小数')
             payload = ProductFields(name=row['商品名称'], model=row['型号'], category=row['分类'],
                                     description=row['商品说明'], price_cents=int(amount * 100) if amount is not None else None)
-            product = database.create_product(payload.model_dump())
-            add(database, product['id'])
-            results.append({'line': line, 'status': 'imported', 'product_id': product['id']})
+            with database.connect() as conn:
+                now = utc_now()
+                try:
+                    cur = conn.execute('INSERT INTO products (name,model,model_key,category,description,price_cents,search_text,created_at,updated_at,revision) VALUES (?,?,?,?,?,?,?,?,?,1)', (*product_values(payload.model_dump()), now, now))
+                except sqlite3.IntegrityError as exc:
+                    if exc.sqlite_errorname == 'SQLITE_CONSTRAINT_UNIQUE':
+                        raise DuplicateModel() from exc
+                    raise
+                product_id = cur.lastrowid
+                conn.execute('INSERT INTO distribution_queue VALUES (?,1,?)', (product_id, now))
+            results.append({'line': line, 'status': 'imported', 'product_id': product_id})
         except (ValueError, ValidationError, DuplicateModel, InvalidOperation) as exc:
             results.append({'line': line, 'status': 'error', 'message': '型号重复' if isinstance(exc, DuplicateModel) else '资料或售价无效'})
     return results

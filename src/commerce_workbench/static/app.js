@@ -106,17 +106,18 @@ function route() {
     history.replaceState(null, "", activeHash || "#/");
     return;
   }
-  const view = !hash || hash === "#/" || hash === "#main" ? "overview" : hash === "#/settings" ? "settings" : /^#\/products(?:\/(?:new|[1-9]\d*))?$/.test(hash) ? "products" : "missing";
+  const view = !hash || hash === "#/" || hash === "#main" ? "overview" : hash === "#/settings" ? "settings" : hash === "#/distribution" ? "distribution" : /^#\/products(?:\/(?:new|[1-9]\d*))?$/.test(hash) ? "products" : "missing";
   document.querySelectorAll("[data-view]").forEach(element => { element.hidden = element.dataset.view !== view; });
   document.querySelectorAll("[data-route]").forEach(element => {
     element.classList.toggle("active", element.dataset.route === view);
     if (element.dataset.route === view) element.setAttribute("aria-current", "page");
     else element.removeAttribute("aria-current");
   });
-  document.querySelector("#current-section").textContent = { overview: "概览", settings: "设置", products: "商品", missing: "页面未找到" }[view];
+  document.querySelector("#current-section").textContent = { overview: "概览", settings: "设置", products: "商品", distribution: "一键铺货", missing: "页面未找到" }[view];
   activeHash = hash;
   if (view === "products") ProductUI.enter(hash);
   else ProductUI.hide();
+  if (view === "distribution") DistributionUI.enter();
 }
 
 nameInput.addEventListener("input", () => { message(""); validateName(); });

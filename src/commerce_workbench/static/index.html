@@ -7,6 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <link rel="stylesheet" href="/static/app.css">
   <script defer src="/static/products.js"></script>
+  <script defer src="/static/distribution.js"></script>
   <script defer src="/static/app.js"></script>
 </head>
 <body>
@@ -21,11 +22,11 @@
       <nav aria-label="主要导航">
         <a class="nav-link active" href="#/" data-route="overview" aria-current="page"><span aria-hidden="true">▦</span>工作台概览</a>
         <a class="nav-link" href="#/products" data-route="products"><span aria-hidden="true">▤</span>商品管理</a>
+        <a class="nav-link" href="#/distribution" data-route="distribution"><span aria-hidden="true">▥</span>一键铺货</a>
         <a class="nav-link" href="#/settings" data-route="settings"><span aria-hidden="true">⚙</span>工作台设置</a>
       </nav>
       <p class="nav-label business-label">业务功能</p>
       <ul class="upcoming-nav">
-        <li>一键铺货<span>待开放</span></li>
         <li>知识管理<span>待开放</span></li>
         <li>客服咨询<span>待开放</span></li>
         <li>售后工单<span>待开放</span></li>
@@ -59,7 +60,7 @@
           <div class="section-heading"><div><h2>业务工作区</h2><p>从这里进入日常工作。</p></div></div>
           <div class="module-grid">
             <a class="module-card module-open" href="#/products"><span class="module-number">01</span><h3>商品管理</h3><p>新建商品，查找和更新资料。</p><span class="module-state">进入 →</span></a>
-            <article class="module-card"><span class="module-number">02</span><h3>一键铺货</h3><p>整理商品并批量发布。</p><span class="module-state">待开放</span></article>
+            <a class="module-card module-open" href="#/distribution"><span class="module-number">02</span><h3>一键铺货</h3><p>整理商品并批量发布。</p><span class="module-state">进入 →</span></a>
             <article class="module-card"><span class="module-number">03</span><h3>知识管理</h3><p>保存资料与常见问答。</p><span class="module-state">待开放</span></article>
             <article class="module-card"><span class="module-number">04</span><h3>客服咨询</h3><p>保留客户对话并跟进问题。</p><span class="module-state">待开放</span></article>
             <article class="module-card"><span class="module-number">05</span><h3>售后工单</h3><p>记录处理过程与服务结果。</p><span class="module-state">待开放</span></article>
@@ -115,6 +116,25 @@
               <div class="form-actions"><button id="product-publish" class="button button-primary" type="button">发布到模拟店铺</button><button id="product-withdraw" class="button" type="button">撤回</button></div>
               <p id="product-listing-message" role="status"></p>
             </section>
+          </div>
+        </section>
+
+        <section data-view="distribution" aria-labelledby="distribution-title" hidden>
+          <div class="page-heading"><h1 id="distribution-title">一键铺货</h1><p>准备商品，发布到本地模拟店铺并跟踪结果。</p></div>
+          <div class="panel distribution-panel">
+            <h2>添加商品</h2><p>按名称、型号或分类搜索已有商品；复制时需要输入新型号。</p>
+            <form id="distribution-search-form"><label for="distribution-search">查找商品</label><input id="distribution-search" maxlength="120"><button class="button" type="submit">查找</button></form>
+            <ul id="distribution-products"></ul>
+            <label for="distribution-csv">导入 CSV（UTF-8，最多 500 行）</label><input id="distribution-csv" type="file" accept=".csv,text/csv"><button id="distribution-import" class="button" type="button">导入商品</button> <a href="/static/distribution-template.csv" download>下载模板</a>
+            <p id="distribution-import-message" role="status"></p><ul id="distribution-import-results"></ul>
+          </div>
+          <div class="panel distribution-panel"><h2>待铺货商品</h2><p>修改商品资料请打开对应商品；选择后发布。</p><ul id="distribution-queue"></ul><p id="distribution-queue-message" role="status"></p><button id="distribution-publish" class="button button-primary" type="button">发布选中商品</button></div>
+          <div class="panel distribution-panel"><h2>批次记录</h2><button id="distribution-refresh" class="button" type="button">刷新记录</button><ul id="distribution-batches"></ul><div id="distribution-batch-detail"></div><p id="distribution-batch-message" role="status"></p></div>
+          <div class="panel distribution-panel"><h2>报价核算</h2><p>美元报价 =（人民币成本 + 运费）÷ 每美元人民币汇率 ÷（1 − 费用比例 − 利润比例）。比例按售价计算。</p>
+            <form id="distribution-quote-form"><div class="product-form-grid">
+              <div><label for="quote-cost">成本（元）</label><input id="quote-cost" inputmode="decimal" required></div><div><label for="quote-shipping">运费（元）</label><input id="quote-shipping" inputmode="decimal" value="0" required></div>
+              <div><label for="quote-exchange">汇率（元/美元）</label><input id="quote-exchange" inputmode="decimal" required></div><div><label for="quote-fee">费用比例（%）</label><input id="quote-fee" inputmode="decimal" value="0" required></div><div><label for="quote-profit">利润比例（%）</label><input id="quote-profit" inputmode="decimal" value="0" required></div>
+            </div><button class="button" type="submit">计算报价</button><p id="distribution-quote-result" role="status"></p></form>
           </div>
         </section>
 
