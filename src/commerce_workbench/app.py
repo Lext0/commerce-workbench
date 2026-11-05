@@ -18,11 +18,34 @@ from commerce_workbench import __version__
 from commerce_workbench.config import Settings
 from commerce_workbench.database import Database, DuplicateModel, ProductNotFound, RevisionConflict
 from commerce_workbench.schemas import ProductFields, ProductList, ProductRead, ProductUpdate, WorkspaceUpdate
+from commerce_workbench import distribution
+from pydantic import ValidationError
+import csv
 
 
 class ImageUpload(BaseModel):
     model_config = ConfigDict(extra="forbid")
     content: str = Field(max_length=4_000_000)
+
+
+class QueueItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    product_id: int = Field(strict=True, ge=1, le=9223372036854775807)
+
+
+class QueueSelection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    selected: bool = Field(strict=True)
+
+
+class CopyProduct(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    model: str = Field(strict=True, min_length=1, max_length=64)
+
+
+class CsvImport(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    text: str = Field(strict=True, max_length=1_000_000)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -180,5 +203,38 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if product["description"]:
             lines.extend(["", product["description"]])
         return {"description": "\n".join(lines)}
+
+    @app.get('/api/distribution/queue')
+    def distribution_queue():
+        return distribution.queue(database)
+
+    @app.post('/api/distribution/queue')
+    def distribution_add(payload: QueueItem):
+        distribution.add(database, payload.product_id)
+        return {'added': True}
+
+    @app.put('/api/distribution/queue/{product_id}')
+    def distribution_select(product_id: int, payload: QueueSelection):
+        distribution.select(database, product_id, payload.selected)
+        return {'selected': payload.selected}
+
+    @app.delete('/api/distribution/queue/{product_id}')
+    def distribution_remove(product_id: int):
+        distribution.remove(database, product_id)
+        return {'removed': True}
+
+    @app.post('/api/distribution/copy/{product_id}')
+    def distribution_copy(product_id: int, payload: CopyProduct):
+        try:
+            return {'product_id': distribution.copy_product(database, product_id, payload.model)}
+        except ValidationError:
+            raise HTTPException(status_code=422, detail='型号无效')
+
+    @app.post('/api/distribution/import')
+    def distribution_import(payload: CsvImport):
+        try:
+            return {'rows': distribution.import_csv(database, payload.text)}
+        except (ValueError, csv.Error) as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
 
     return app
