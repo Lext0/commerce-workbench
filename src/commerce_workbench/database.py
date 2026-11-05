@@ -64,7 +64,7 @@ class Database:
             version = connection.execute(
                 "SELECT COALESCE(MAX(version), 0) FROM schema_migrations"
             ).fetchone()[0]
-            if version > 2:
+            if version > 3:
                 raise RuntimeError("Database version is newer than this application")
             if version == 0:
                 connection.execute(
@@ -98,6 +98,25 @@ class Database:
                 )
                 connection.execute("CREATE INDEX products_updated ON products(updated_at DESC, id DESC)")
                 connection.execute("INSERT INTO schema_migrations VALUES (2, ?)", (utc_now(),))
+            if version < 3:
+                connection.execute("CREATE TABLE product_images (product_id INTEGER PRIMARY KEY REFERENCES products(id) ON DELETE CASCADE, content_type TEXT NOT NULL, content BLOB NOT NULL)")
+                connection.execute("INSERT INTO schema_migrations VALUES (3, ?)", (utc_now(),))
+
+    def image(self, product_id: int):
+        self.product(product_id)
+        with self.connect() as connection:
+            return connection.execute("SELECT content_type, content FROM product_images WHERE product_id = ?", (product_id,)).fetchone()
+
+    def put_image(self, product_id: int, content_type: str, content: bytes):
+        with self.connect() as connection:
+            if not connection.execute("SELECT 1 FROM products WHERE id = ?", (product_id,)).fetchone():
+                raise ProductNotFound()
+            connection.execute("INSERT INTO product_images VALUES (?, ?, ?) ON CONFLICT(product_id) DO UPDATE SET content_type=excluded.content_type, content=excluded.content", (product_id, content_type, content))
+
+    def delete_image(self, product_id: int):
+        self.product(product_id)
+        with self.connect() as connection:
+            connection.execute("DELETE FROM product_images WHERE product_id = ?", (product_id,))
 
     def workspace(self) -> dict:
         with self.connect() as connection:

@@ -102,6 +102,13 @@
               <div id="product-message" class="message" role="status" aria-live="polite" hidden></div>
               <button id="reload-product" class="text-button" type="button" hidden>载入最新商品资料</button>
             </form>
+            <section id="product-image-panel" class="panel" hidden>
+              <div class="panel-heading"><h2>商品图片</h2><p>支持 JPEG、PNG、WebP，最大 3 MB。选择后单独保存。</p></div>
+              <img id="product-image" class="product-image" alt="商品图片" hidden>
+              <label for="product-image-file">选择图片</label><input id="product-image-file" type="file" accept="image/jpeg,image/png,image/webp">
+              <div class="form-actions"><button id="product-image-upload" class="button" type="button">保存图片</button><button id="product-image-delete" class="button" type="button">删除图片</button></div>
+              <p id="product-image-message" role="status"></p>
+            </section>
           </div>
         </section>
 

@@ -52,6 +52,11 @@ const ProductUI = (() => {
     data.baseline = JSON.stringify(values());
     data.touched.clear();
     data.loaded = true;
+    $("#product-image-panel").hidden = !product;
+    $("#product-image-file").value = "";
+    $("#product-image-message").textContent = "";
+    $("#product-image").hidden = true;
+    if (product) $("#product-image").src = `/api/products/${product.id}/image?t=${Date.now()}`;
     $("#product-fields").disabled = false;
     $("#products-title").textContent = product ? "编辑商品" : "新建商品";
     $("#products-subtitle").textContent = product ? "修改后保存，商品列表会显示最新资料。" : "先保存基本资料，之后可以随时继续修改。";
@@ -166,6 +171,7 @@ const ProductUI = (() => {
     data.route = hash;
     data.epoch++;
     data.loaded = false;
+    $("#product-image-panel").hidden = true;
     const list = hash === "#/products";
     $("#product-list-panel").hidden = !list;
     $("#product-editor").hidden = list;
@@ -221,6 +227,35 @@ const ProductUI = (() => {
   $("#products-prev").addEventListener("click", () => { data.offset = Math.max(0, data.offset - data.limit); loadList(); });
   $("#products-next").addEventListener("click", () => { data.offset += data.limit; loadList(); });
   $("#retry-product").addEventListener("click", () => loadProduct(data.route.split("/").pop()));
+  $("#product-image").addEventListener("load", () => { $("#product-image").hidden = false; });
+  $("#product-image").addEventListener("error", () => { $("#product-image").hidden = true; });
+  $("#product-image-upload").addEventListener("click", async () => {
+    const file = $("#product-image-file").files[0];
+    const id = data.id;
+    if (!file || file.size > 3000000 || !["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      $("#product-image-message").textContent = "请选择不超过 3 MB 的 JPEG、PNG 或 WebP 图片。"; return;
+    }
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      let binary = "";
+      for (let i = 0; i < bytes.length; i += 8192) binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+      await request(`/api/products/${id}/image`, {method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify({content:btoa(binary)})});
+      if (data.id !== id) return;
+      $("#product-image").src = `/api/products/${id}/image?t=${Date.now()}`;
+      $("#product-image-file").value = "";
+      $("#product-image-message").textContent = "图片已保存。";
+    } catch { if (data.id === id) $("#product-image-message").textContent = "图片保存失败，请检查文件后重试。"; }
+  });
+  $("#product-image-delete").addEventListener("click", async () => {
+    const id = data.id;
+    if (!window.confirm("确定删除这件商品的图片吗？")) return;
+    try {
+      await request(`/api/products/${id}/image`, {method:"DELETE", headers:{"Content-Type":"application/json"}, body:"{}"});
+      if (data.id !== id) return;
+      $("#product-image").removeAttribute("src"); $("#product-image").hidden = true;
+      $("#product-image-message").textContent = "图片已删除。";
+    } catch { if (data.id === id) $("#product-image-message").textContent = "图片删除失败，请重试。"; }
+  });
   $("#reload-product").addEventListener("click", () => {
     if (!dirty() || window.confirm("载入最新资料会替换当前未保存的内容，确定继续吗？")) loadProduct(data.id);
   });

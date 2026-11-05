@@ -1,9 +1,16 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
+import base64
+import binascii
+import io
 import sqlite3
+import warnings
+
+from PIL import Image, UnidentifiedImageError
+from pydantic import BaseModel, ConfigDict, Field
 
 from fastapi import FastAPI, HTTPException, Path as PathParameter, Query, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
@@ -11,6 +18,11 @@ from commerce_workbench import __version__
 from commerce_workbench.config import Settings
 from commerce_workbench.database import Database, DuplicateModel, ProductNotFound, RevisionConflict
 from commerce_workbench.schemas import ProductFields, ProductList, ProductRead, ProductUpdate, WorkspaceUpdate
+
+
+class ImageUpload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    content: str = Field(max_length=4_000_000)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -113,5 +125,35 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return database.update_product(product_id, payload.model_dump(exclude={"revision"}), payload.revision)
         except RevisionConflict:
             raise HTTPException(status_code=409, detail={"code": "revision_conflict", "message": "商品已在其他页面修改，请载入最新内容后再保存"})
+
+    @app.get("/api/products/{product_id}/image")
+    def get_image(product_id: int):
+        row = database.image(product_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="商品尚未设置图片")
+        return Response(row["content"], media_type=row["content_type"], headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
+
+    @app.put("/api/products/{product_id}/image")
+    def put_image(payload: ImageUpload, product_id: int):
+        try:
+            content = base64.b64decode(payload.content, validate=True)
+            if not content or len(content) > 3_000_000:
+                raise ValueError("size")
+            with warnings.catch_warnings():
+                warnings.simplefilter("error", Image.DecompressionBombWarning)
+                with Image.open(io.BytesIO(content)) as image:
+                    if image.format not in {"JPEG", "PNG", "WEBP"} or image.width * image.height > 20_000_000:
+                        raise ValueError("format or dimensions")
+                    image.load()
+                    content_type = Image.MIME[image.format]
+        except (ValueError, binascii.Error, UnidentifiedImageError, OSError, Image.DecompressionBombError, Image.DecompressionBombWarning):
+            raise HTTPException(status_code=422, detail="请选择不超过 3 MB 的有效 JPEG、PNG 或 WebP 图片")
+        database.put_image(product_id, content_type, content)
+        return {"saved": True}
+
+    @app.delete("/api/products/{product_id}/image")
+    def delete_image(product_id: int):
+        database.delete_image(product_id)
+        return {"deleted": True}
 
     return app
