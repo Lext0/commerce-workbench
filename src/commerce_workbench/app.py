@@ -171,4 +171,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def withdraw_listing(product_id: int):
         return database.withdraw(product_id)
 
+    @app.post("/api/products/{product_id}/copy-draft")
+    def product_copy_draft(product_id: int):
+        product = database.product(product_id)
+        lines = [product["name"], f"型号：{product['model']}"]
+        if product["category"]:
+            lines.append(f"分类：{product['category']}")
+        if product["description"]:
+            lines.extend(["", product["description"]])
+        return {"description": "\n".join(lines)}
+
     return app

@@ -52,6 +52,8 @@ const ProductUI = (() => {
     data.baseline = JSON.stringify(values());
     data.touched.clear();
     data.loaded = true;
+    $("#product-draft").hidden = !product;
+    $("#product-draft-message").textContent = "";
     $("#product-image-panel").hidden = !product;
     $("#product-listing-panel").hidden = !product;
     if (product) loadListing(product.id);
@@ -230,6 +232,23 @@ const ProductUI = (() => {
   $("#products-prev").addEventListener("click", () => { data.offset = Math.max(0, data.offset - data.limit); loadList(); });
   $("#products-next").addEventListener("click", () => { data.offset += data.limit; loadList(); });
   $("#retry-product").addEventListener("click", () => loadProduct(data.route.split("/").pop()));
+  $("#product-draft").addEventListener("click", async () => {
+    const id = data.id;
+    if (dirty()) { $("#product-draft-message").textContent = "请先保存当前修改，再根据已保存资料起草。"; return; }
+    if (fields.description.value && !window.confirm("起草内容会替换编辑区的商品说明，确定继续吗？")) return;
+    const baseline = JSON.stringify(values());
+    $("#product-draft").disabled = true;
+    try {
+      const result = await request(`/api/products/${id}/copy-draft`, {method:"POST", headers:{"Content-Type":"application/json"}, body:"{}"});
+      if (data.id !== id) return;
+      if (JSON.stringify(values()) !== baseline) { $("#product-draft-message").textContent = "商品内容已修改，草稿未覆盖当前输入。"; return; }
+      if (count(result.description) > 4000) { $("#product-draft-message").textContent = "草稿超过商品说明长度，请先精简原说明。"; return; }
+      fields.description.value = result.description;
+      data.touched.add("description"); validate();
+      $("#product-draft-message").textContent = "草稿已放入编辑区，请核对并保存。";
+    } catch { if (data.id === id) $("#product-draft-message").textContent = "暂时无法起草，请重试。"; }
+    finally { $("#product-draft").disabled = false; }
+  });
   function showListing(result) {
     const labels = {unpublished: "尚未发布", published: "已发布到模拟店铺", withdrawn: "已撤回"};
     $("#product-listing-status").textContent = labels[result.status] || "状态未知";
