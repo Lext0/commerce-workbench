@@ -156,4 +156,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         database.delete_image(product_id)
         return {"deleted": True}
 
+    @app.get("/api/products/{product_id}/listing")
+    def get_listing(product_id: int):
+        return database.listing(product_id)
+
+    @app.post("/api/products/{product_id}/listing")
+    def publish_listing(product_id: int):
+        try:
+            return database.publish(product_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+
+    @app.delete("/api/products/{product_id}/listing")
+    def withdraw_listing(product_id: int):
+        return database.withdraw(product_id)
+
     return app

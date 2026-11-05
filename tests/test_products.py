@@ -147,4 +147,4 @@ def test_version_one_migration_keeps_existing_workspace(settings):
     assert database.workspace() == before
     assert database.products("", 20, 0)["total"] == 0
     with database.connect() as connection:
-        assert [row[0] for row in connection.execute("SELECT version FROM schema_migrations ORDER BY version")] == [1, 2, 3]
+        assert [row[0] for row in connection.execute("SELECT version FROM schema_migrations ORDER BY version")] == [1, 2, 3, 4]

@@ -53,6 +53,8 @@ const ProductUI = (() => {
     data.touched.clear();
     data.loaded = true;
     $("#product-image-panel").hidden = !product;
+    $("#product-listing-panel").hidden = !product;
+    if (product) loadListing(product.id);
     $("#product-image-file").value = "";
     $("#product-image-message").textContent = "";
     $("#product-image").hidden = true;
@@ -172,6 +174,7 @@ const ProductUI = (() => {
     data.epoch++;
     data.loaded = false;
     $("#product-image-panel").hidden = true;
+    $("#product-listing-panel").hidden = true;
     const list = hash === "#/products";
     $("#product-list-panel").hidden = !list;
     $("#product-editor").hidden = list;
@@ -227,6 +230,31 @@ const ProductUI = (() => {
   $("#products-prev").addEventListener("click", () => { data.offset = Math.max(0, data.offset - data.limit); loadList(); });
   $("#products-next").addEventListener("click", () => { data.offset += data.limit; loadList(); });
   $("#retry-product").addEventListener("click", () => loadProduct(data.route.split("/").pop()));
+  function showListing(result) {
+    const labels = {unpublished: "尚未发布", published: "已发布到模拟店铺", withdrawn: "已撤回"};
+    $("#product-listing-status").textContent = labels[result.status] || "状态未知";
+    $("#product-withdraw").disabled = result.status !== "published";
+  }
+  async function loadListing(id) {
+    $("#product-listing-message").textContent = "";
+    $("#product-listing-status").textContent = "正在读取发布状态";
+    try { const result = await request(`/api/products/${id}/listing`); if (data.id === id) showListing(result); }
+    catch { if (data.id === id) $("#product-listing-status").textContent = "无法读取发布状态，请重新打开商品。"; }
+  }
+  async function changeListing(method) {
+    const id = data.id;
+    if (method === "POST" && dirty()) { $("#product-listing-message").textContent = "请先保存商品修改，再发布。"; return; }
+    if (!window.confirm(method === "POST" ? "确认将已保存资料发布到模拟店铺？" : "确认从模拟店铺撤回商品？")) return;
+    $("#product-publish").disabled = true; $("#product-withdraw").disabled = true;
+    try {
+      const result = await request(`/api/products/${id}/listing`, {method, headers:{"Content-Type":"application/json"}, body:"{}"});
+      if (data.id !== id) return;
+      showListing(result); $("#product-listing-message").textContent = method === "POST" ? "发布成功。" : "已撤回。";
+    } catch (error) { if (data.id === id) { await loadListing(id); $("#product-listing-message").textContent = error.message || "操作未完成，请重新读取状态后重试。"; } }
+    finally { if (data.id === id) $("#product-publish").disabled = false; }
+  }
+  $("#product-publish").addEventListener("click", () => changeListing("POST"));
+  $("#product-withdraw").addEventListener("click", () => changeListing("DELETE"));
   $("#product-image").addEventListener("load", () => { $("#product-image").hidden = false; });
   $("#product-image").addEventListener("error", () => { $("#product-image").hidden = true; });
   $("#product-image-upload").addEventListener("click", async () => {

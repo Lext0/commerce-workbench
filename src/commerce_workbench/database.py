@@ -2,6 +2,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 import sqlite3
+import json
 from typing import Iterator
 import unicodedata
 
@@ -64,7 +65,7 @@ class Database:
             version = connection.execute(
                 "SELECT COALESCE(MAX(version), 0) FROM schema_migrations"
             ).fetchone()[0]
-            if version > 3:
+            if version > 4:
                 raise RuntimeError("Database version is newer than this application")
             if version == 0:
                 connection.execute(
@@ -101,6 +102,41 @@ class Database:
             if version < 3:
                 connection.execute("CREATE TABLE product_images (product_id INTEGER PRIMARY KEY REFERENCES products(id) ON DELETE CASCADE, content_type TEXT NOT NULL, content BLOB NOT NULL)")
                 connection.execute("INSERT INTO schema_migrations VALUES (3, ?)", (utc_now(),))
+            if version < 4:
+                connection.execute("CREATE TABLE listings (product_id INTEGER PRIMARY KEY REFERENCES products(id) ON DELETE CASCADE, status TEXT NOT NULL CHECK(status IN ('published','withdrawn')), snapshot TEXT NOT NULL, updated_at TEXT NOT NULL, image_type TEXT NOT NULL, image BLOB NOT NULL)")
+                connection.execute("INSERT INTO schema_migrations VALUES (4, ?)", (utc_now(),))
+
+    def listing(self, product_id: int):
+        self.product(product_id)
+        with self.connect() as connection:
+            row = connection.execute("SELECT status, snapshot, updated_at FROM listings WHERE product_id=?", (product_id,)).fetchone()
+            if row is None:
+                return {"status": "unpublished"}
+            result = dict(row)
+            result["snapshot"] = json.loads(result["snapshot"])
+            return result
+
+    def publish(self, product_id: int):
+        with self.connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(f"SELECT {PRODUCT_COLUMNS} FROM products WHERE id=?", (product_id,)).fetchone()
+            if row is None:
+                raise ProductNotFound()
+            product = dict(row)
+            if product["price_cents"] is None or product["price_cents"] <= 0:
+                raise ValueError("发布前请填写大于零的售价")
+            image = connection.execute("SELECT content_type, content FROM product_images WHERE product_id=?", (product_id,)).fetchone()
+            if not image:
+                raise ValueError("发布前请上传商品图片")
+            timestamp = utc_now()
+            connection.execute("INSERT INTO listings VALUES (?, 'published', ?, ?, ?, ?) ON CONFLICT(product_id) DO UPDATE SET status='published', snapshot=excluded.snapshot, updated_at=excluded.updated_at, image_type=excluded.image_type, image=excluded.image", (product_id, json.dumps(product, ensure_ascii=False), timestamp, image[0], image[1]))
+        return self.listing(product_id)
+
+    def withdraw(self, product_id: int):
+        self.product(product_id)
+        with self.connect() as connection:
+            connection.execute("UPDATE listings SET status='withdrawn', updated_at=? WHERE product_id=? AND status='published'", (utc_now(), product_id))
+        return self.listing(product_id)
 
     def image(self, product_id: int):
         self.product(product_id)

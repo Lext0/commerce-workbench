@@ -18,7 +18,7 @@ def test_workspace_update_survives_application_restart(settings):
     with TestClient(create_app(settings), base_url="http://localhost") as second:
         assert second.get("/api/workspace").json() == saved
     with Database(settings.database_path).connect() as connection:
-        assert connection.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0] == 3
+        assert connection.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0] == 4
         assert connection.execute("SELECT COUNT(*) FROM workspace").fetchone()[0] == 1
 
 
@@ -71,7 +71,7 @@ def test_newer_database_is_not_modified(settings):
     database = Database(settings.database_path)
     database.initialize()
     with database.connect() as connection:
-        connection.execute("INSERT INTO schema_migrations VALUES (4, 'future')")
+        connection.execute("INSERT INTO schema_migrations VALUES (5, 'future')")
     before = database.workspace()
     with pytest.raises(RuntimeError, match="newer"):
         database.initialize()
