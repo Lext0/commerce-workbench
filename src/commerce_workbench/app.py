@@ -48,6 +48,20 @@ class CsvImport(BaseModel):
     text: str = Field(strict=True, max_length=1_000_000)
 
 
+class BatchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    request_id: str = Field(strict=True, min_length=16, max_length=100, pattern=r'^[a-zA-Z0-9_-]+$')
+
+
+class QuoteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    cost: str = Field(strict=True, max_length=32)
+    shipping: str = Field(strict=True, max_length=32)
+    exchange: str = Field(strict=True, max_length=32)
+    fee: str = Field(strict=True, max_length=32)
+    profit: str = Field(strict=True, max_length=32)
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings.from_environment()
     database = Database(settings.database_path)
@@ -235,6 +249,37 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             return {'rows': distribution.import_csv(database, payload.text)}
         except (ValueError, csv.Error) as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+
+    @app.get('/api/distribution/batches')
+    def distribution_batches():
+        return distribution.batches(database)
+
+    @app.post('/api/distribution/batches')
+    def distribution_create_batch(payload: BatchRequest):
+        try:
+            batch_id = distribution.create_batch(database, payload.request_id)
+            return distribution.process_batch(database, batch_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+
+    @app.get('/api/distribution/batches/{batch_id}')
+    def distribution_batch(batch_id: int):
+        return distribution.batch(database, batch_id)
+
+    @app.post('/api/distribution/batches/{batch_id}/retry')
+    def distribution_retry(batch_id: int):
+        return distribution.process_batch(database, batch_id)
+
+    @app.post('/api/distribution/batches/{batch_id}/items/{product_id}/retry')
+    def distribution_retry_item(batch_id: int, product_id: int):
+        return distribution.process_batch(database, batch_id, product_id)
+
+    @app.post('/api/distribution/quote')
+    def distribution_quote(payload: QuoteRequest):
+        try:
+            return distribution.quote(**payload.model_dump())
+        except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc))
 
     return app

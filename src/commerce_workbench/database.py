@@ -65,7 +65,7 @@ class Database:
             version = connection.execute(
                 "SELECT COALESCE(MAX(version), 0) FROM schema_migrations"
             ).fetchone()[0]
-            if version > 5:
+            if version > 6:
                 raise RuntimeError("Database version is newer than this application")
             if version == 0:
                 connection.execute(
@@ -108,6 +108,10 @@ class Database:
             if version < 5:
                 connection.execute("CREATE TABLE distribution_queue (product_id INTEGER PRIMARY KEY REFERENCES products(id) ON DELETE CASCADE, selected INTEGER NOT NULL DEFAULT 1 CHECK(selected IN (0,1)), added_at TEXT NOT NULL)")
                 connection.execute("INSERT INTO schema_migrations VALUES (5, ?)", (utc_now(),))
+            if version < 6:
+                connection.execute("CREATE TABLE distribution_batches (id INTEGER PRIMARY KEY AUTOINCREMENT, request_id TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL)")
+                connection.execute("CREATE TABLE distribution_items (batch_id INTEGER NOT NULL REFERENCES distribution_batches(id), product_id INTEGER NOT NULL REFERENCES products(id), status TEXT NOT NULL CHECK(status IN ('pending','success','failed','skipped')), message TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL, PRIMARY KEY(batch_id, product_id))")
+                connection.execute("INSERT INTO schema_migrations VALUES (6, ?)", (utc_now(),))
 
     def listing(self, product_id: int):
         self.product(product_id)

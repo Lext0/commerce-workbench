@@ -2,7 +2,8 @@
 import csv
 import io
 import sqlite3
-from decimal import Decimal, InvalidOperation
+import json
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from pydantic import ValidationError
 
@@ -86,3 +87,76 @@ def import_csv(database, text):
         except (ValueError, ValidationError, DuplicateModel, InvalidOperation) as exc:
             results.append({'line': line, 'status': 'error', 'message': '型号重复' if isinstance(exc, DuplicateModel) else '资料或售价无效'})
     return results
+
+
+def create_batch(database, request_id):
+    with database.connect() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        existing = conn.execute('SELECT id FROM distribution_batches WHERE request_id=?', (request_id,)).fetchone()
+        if existing:
+            return existing[0]
+        products = conn.execute('SELECT product_id FROM distribution_queue WHERE selected=1 ORDER BY product_id').fetchall()
+        if not products:
+            raise ValueError('请先选择待铺货商品')
+        now = utc_now()
+        batch_id = conn.execute('INSERT INTO distribution_batches(request_id,created_at) VALUES (?,?)', (request_id, now)).lastrowid
+        conn.executemany("INSERT INTO distribution_items VALUES (?,?,'pending','',?)", [(batch_id, row[0], now) for row in products])
+        return batch_id
+
+
+def batch(database, batch_id):
+    with database.connect() as conn:
+        header = conn.execute('SELECT id, created_at FROM distribution_batches WHERE id=?', (batch_id,)).fetchone()
+        if not header:
+            raise ProductNotFound()
+        items = [dict(row) for row in conn.execute('SELECT i.product_id,p.name,p.model,i.status,i.message,i.updated_at FROM distribution_items i JOIN products p ON p.id=i.product_id WHERE i.batch_id=? ORDER BY i.product_id', (batch_id,))]
+        return {**dict(header), 'items': items}
+
+
+def batches(database):
+    with database.connect() as conn:
+        return [dict(row) for row in conn.execute('SELECT id,created_at FROM distribution_batches ORDER BY id DESC LIMIT 100')]
+
+
+def process_batch(database, batch_id, product_id=None):
+    current = batch(database, batch_id)
+    if product_id is not None and not any(item['product_id'] == product_id for item in current['items']):
+        raise ProductNotFound()
+    for item in current['items']:
+        if product_id is not None and item['product_id'] != product_id:
+            continue
+        if item['status'] not in ('pending', 'failed'):
+            continue
+        with database.connect() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            row = conn.execute('SELECT status FROM distribution_items WHERE batch_id=? AND product_id=?', (batch_id, item['product_id'])).fetchone()
+            if row['status'] not in ('pending', 'failed'):
+                continue
+            pid = item['product_id']
+            product = dict(conn.execute(f'SELECT {PRODUCT_COLUMNS} FROM products WHERE id=?', (pid,)).fetchone())
+            listing = conn.execute("SELECT 1 FROM listings WHERE product_id=? AND status='published'", (pid,)).fetchone()
+            image = conn.execute('SELECT content_type,content FROM product_images WHERE product_id=?', (pid,)).fetchone()
+            if listing:
+                status, message = 'skipped', '模拟店铺已有该型号'
+            elif product['price_cents'] is None or product['price_cents'] <= 0:
+                status, message = 'failed', '请填写大于零的售价'
+            elif image is None:
+                status, message = 'failed', '请上传商品图片'
+            else:
+                status, message = 'success', '发布成功'
+                conn.execute("INSERT INTO listings VALUES (?, 'published', ?, ?, ?, ?) ON CONFLICT(product_id) DO UPDATE SET status='published', snapshot=excluded.snapshot, updated_at=excluded.updated_at, image_type=excluded.image_type, image=excluded.image", (pid, json.dumps(product, ensure_ascii=False), utc_now(), image[0], image[1]))
+            conn.execute('UPDATE distribution_items SET status=?,message=?,updated_at=? WHERE batch_id=? AND product_id=?', (status, message, utc_now(), batch_id, pid))
+    return batch(database, batch_id)
+
+
+def quote(cost, shipping, exchange, fee, profit):
+    try:
+        cost, shipping, exchange, fee, profit = [Decimal(x) for x in (cost, shipping, exchange, fee, profit)]
+        if not all(x.is_finite() for x in (cost, shipping, exchange, fee, profit)):
+            raise ValueError()
+        if not (Decimal('0') <= cost <= 100000000 and 0 <= shipping <= 100000000 and Decimal('0.0001') <= exchange <= 1000000 and 0 <= fee < 100 and 0 <= profit < 100 and fee + profit < 100):
+            raise ValueError()
+        value = ((cost + shipping) / exchange / (1 - (fee + profit) / 100)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        return {'usd': format(value, '.2f')}
+    except (InvalidOperation, ValueError, OverflowError):
+        raise ValueError('请输入有效的成本、汇率和比例，费用与利润比例之和须小于 100%')
